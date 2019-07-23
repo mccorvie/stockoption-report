@@ -1,0 +1,138 @@
+
+% From http://blog.poormansmath.net/latex-class-for-lecture-notes/
+
+% The options (see the first line) are these:
+
+% english or italian: the document’s language;
+% course, seminar or talk: a course is a medium-length document structured in sections, subsections and paragraphs; a seminar is a short document without structure or with subsections; a talk is the sheets you take with you when you give a seminar.
+
+% The second option defines the style of the document; if you want to tweak some parameters, there are also these fine-tuning options:
+
+% headertitle, headersection, headersubsection or headerno: what to display on the top of the pages;
+% theoremnosection, theoremsection or theoremsubsection: numbering of theorems, definitions, etc.;
+% cleardoublepage or nocleardoublepage: whether we want empty double pages after a section ending;
+% oneside or twoside: margins and headers optimized for one-sided or two-sided printing;
+% onecolumn or twocolumn: how many columns per page.
+
+\documentclass[english,seminar]{pnotes}
+
+
+% Uncomment to use Ryan's frequently used macros
+\RequirePackage{Ryanalysis}
+\RequirePackage{Ryanprob}
+
+
+% Obviously you have to replace the values, or, when appropriate, delete some line. Note that “author” and “email” are name and e-mail of the notes taker. 
+
+\title{Black Scholes Notes}
+\subtitle{Expectations}
+% \subject{SUBJECT}
+\author{Ryan McCorvie}
+% \email{EMAIL}
+\date{01}{01}{2017}
+% \dateend{DD}{MM}{YYYY}
+% \place{PLACE}
+
+
+
+% The class defines also some commands:
+
+% for course, the command \lecture{duration}{dd}{mm}{yyyy} which writes on the margin information about the lesson’s number, duration and date;
+% for talk, the commands \separator, which simply draws a horizontal line, and \tosay{message} which prints the message inside a box (useful to remember things you don’t have to write on the blackboard);
+% \mymarginpar{message}, which behaves like a regular \marginpar but with a custom style.
+
+\begin{document}
+\subsection{Normal options}
+Suppose $X\sim \dnorm(\mu,\sigma^2)$.  Then
+\begin{equation}
+\begin{split}
+	\E (X-K)^{+} &= \frac 1 {\sigma \sqrt{2 \pi}} \int_{\R} (x-K)^{+} e^{-\frac 1 2 \left( \frac{x-\mu} \sigma \right)^2} \, dx \\
+	&= \frac 1 { \sqrt{2 \pi}}\int_{\R} (\sigma u + \mu - K)^{+} e^{-\frac 1 2 u^2} \, du \\
+	&= \frac 1 { \sqrt{2 \pi}}\int_{(K-\mu)/\sigma}^\infty (\sigma u + \mu - K) e^{-\frac 1 2 u^2} \, du \\
+	&= (\mu-K) \Phi\left( \frac{ \mu-K} \sigma \right)  + \frac \sigma { \sqrt{2 \pi}} e^{- \frac 1 2 \left(\frac{\mu-K} \sigma \right)^2}
+\end{split}
+\end{equation}
+If $\sigma = s\sqrt{t} $ and $\E X = \mu = F$ is the forward price, then this can be written
+\begin{equation}
+	\E(X-K)^+ = (F-K) \, \Phi( d  ) + \frac {s\sqrt{t}  }{ \sqrt{2 \pi}} e^{- \frac 1 2 d^2} \qquad \text{where} \qquad d = \frac{F-K}{s\sqrt{t} }
+\end{equation}
+
+\subsection{Lognormal options}
+
+Now suppose $Y=e^{X}$ where $Y\sim \dnorm(\mu,\sigma)$.  Then
+\begin{equation}
+\begin{split}
+	 \E (Y-K)^+ &=\frac 1 {\sigma \sqrt{2 \pi}} \int_{\R} (e^x - K)^+ \, e^{-\frac 1 2 \left(\frac{x-\mu}{\sigma}\right)^2}\, dx\\
+	 &= \frac 1 {\sqrt{2 \pi}} \int_{\R} (e^{\sigma u + \mu} - K)^+ \, e^{-\frac 1 2 u^2}\, du\\
+	 &= \frac 1 {\sqrt{2 \pi}} \int_{(\log K-\mu)/\sigma}^\infty (e^{\sigma u + \mu}-K) \,e^{-\frac 1 2 u^2}\, du\\
+	 &= -K \, \Phi\left(\frac{\mu - \log K} \sigma \right) + e^{\mu + \frac 1 2 \sigma^2} \frac 1 {\sqrt{2 \pi}}  \int_{(\log K-\mu)/\sigma}^\infty e^{-\frac 1 2 (u-\sigma)^2}\, dx \\
+	 &= -K \, \Phi\left(\frac{\mu - \log K} \sigma \right) + e^{\mu+\frac 1 2 \sigma^2} \Phi\left( \frac{\mu - \log K  + \sigma^2} \sigma \right)
+ \end{split}
+\end{equation}
+When $K \to -\infty$, then $\E(Y-K)^+ \to \E Y = e^{\mu + \frac 1 2 \sigma^2}$.  If we write $F= \E Y$ and $\sigma = s \sqrt t$, this can be written more symetrically as
+\begin{equation}
+	\E(Y-K)^+ = F \, \Phi(d_+) -K \, \Phi( d_- ) \label{eq:black scholes}
+\end{equation}
+where
+\begin{equation}
+	d_- = \frac{\log(F/K) -\frac 1 2 s^2 t}{s\sqrt t} \qquad  d_+ = d_+ + s \sqrt t  = \frac{\log(F/K) +\frac 1 2 s^2 t}{s \sqrt t}	
+\end{equation}
+Let the forward call price be given by $c_F = \E(Y-K)^+$ and the forward put price be given by $p_F = \E(K-Y)^+$.  Then put call pairity is
+\begin{equation}
+	c_F - p_F = \E(Y-K) = F-K
+\end{equation}
+Thus
+\begin{equation}
+	p_F = \E(K-Y)^{+} = -F\,\Phi(-d_+) + K \, \Phi(-d_-)
+\end{equation}
+
+\subsection{Greeks}
+
+Let's compute sensitivties.  Also, assume the forward price is given by $e^{(r-q)t}S$, where $r$ is the riskfree interest rate and $q$ is the convenience yield or dividend yield.  As before, let the forward call price be given by $c_F = \E(X-K)^+$  and the spot option price be given by $c = e^{-rt} c_F$, and let's compute the generic partial derivative with respect ot $u$-- we'll specialize later.  
+
+\begin{equation}
+	\frac {\partial c_F}{\partial u} = \frac{\partial F}{\partial u} \, \Phi(d_+) + F \Phi'(d_+) \frac{\partial d_+}{\partial u} - \frac{\partial K} {\partial u} \, \Phi(d_-) - K \Phi'(d_-) \frac{\partial{d_-}}{\partial u} \label{eq:greek1}
+\end{equation}
+Note that 
+\begin{equation}
+	d_+^2-d_-^2 = (d_++d_-)(d_+-d_-)= \frac{2 \log(F/K)}{s \sqrt t} \cdot s \sqrt t = 2\log(F/K)
+\end{equation}
+Therefore, we can define
+\begin{equation}
+	\Psi := F \Phi'(d_+) = \frac F {\sqrt{2\pi}} e^{-\frac 1 2 d_+^2} = \frac K {\sqrt{2\pi}}  e^{-\frac 1 2 d_-^2}= K \Phi'(d_-)
+\end{equation}
+This allows us to simplify \eqref{eq:greek1}
+\begin{equation}
+	\frac {\partial c}{\partial u} = \frac{\partial F}{\partial u} \, \Phi(d_+)  - \frac{\partial K} {\partial u} \, \Phi(d_-) + \Psi  \, \frac{\partial (d_+-d_-)}{\partial u} \label{eq:greek master}
+\end{equation}
+First let's consider sensitivities to variables on which $d_+-d_- = s \sqrt t$ does not depend, so the last term is 0.  
+\begin{equation}
+\begin{split}
+	m = \frac{\partial c_F}{\partial K} &= -\Phi(d_-) = -\Pr( Y \geq K ) \\
+	\Delta_F = \frac{\partial c_F}{\partial S} &= \frac{\partial F}{\partial S} \Phi(d_+)  = e^{(r-q)t} \Phi(d_+)\\
+	\Delta = \frac{\partial c}{\partial S} &= e^{-rt} \frac{\partial c_F}{\partial S}  = e^{-q t} \Phi(d_+)\\
+	\rho_F = \frac{\partial c_F}{\partial r} &= \frac{\partial F}{\partial r} \Phi(d_+) = t F \Phi(d_+) \\
+	\rho = \frac{\partial c}{\partial r} &= -t c + e^{-rt} t F \Phi(d_+) = t K \Phi(d_-)
+\end{split}
+\end{equation}
+The quantity $m$ is sometimes called moneyness.  Now let's compute greeks which do include the last term.  Define a new quantity
+\begin{equation}
+	\Upsilon = e^{-rt}\Psi = e^{-rt} K \Phi'(d_-) = e^{-qt} S \Phi'(d_+)	
+\end{equation}
+Then we can compute
+\begin{equation}
+\begin{split}
+	\text{vega}_F = \frac{\partial c_F}{\partial s} &=  \sqrt t \Psi\\
+	\text{vega} = \frac{\partial c}{\partial s} &=  e^{-r t}  \frac{\partial c_F}{\partial s} = \sqrt t \Upsilon \\
+	\tau_F = -\frac{\partial c_F}{\partial t} &=  (q-r)F \Phi(d_+) - \frac {s \Psi} {2 \sqrt{t}} \\
+	\tau = -\frac{\partial c}{\partial t} &= r c - e^{-rt}\frac{\partial c_F}{\partial t} = q F \Phi(d_+) - rK \Phi(d_-) - \frac {s \Upsilon } {2 \sqrt{t}}
+\end{split}
+\end{equation}
+Finally we compute
+\begin{equation}
+\begin{split}
+	\Gamma_F = \frac{\partial^2 c_F}{ \partial S^2} &= \frac{F}{S} \Phi'(d_+) \frac{\partial d_+}{\partial S}  = \frac {\Psi}{ S^2 s \sqrt{t}} \\
+	\Gamma = \frac{\partial^2 c}{ \partial S^2} &= e^{-rt} \Gamma_F = \frac {\Upsilon}{ S^2 s \sqrt{ t}}
+\end{split}
+\end{equation}
+\end{document}
