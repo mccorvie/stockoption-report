@@ -1,0 +1,149 @@
+---
+title: "Option Analysis Report"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("OptionAnalysis.R" )
+library("knitr")
+pricing.date=today
+```
+
+## Position Summary
+
+The report is being run on `r format(today(),"%d-%b-%Y")` with a spot price of `r spot.price`.  
+
+This report is being run on the following positions.
+
+```{r positions, echo=FALSE}
+
+  # Get position table
+  pos <- read.positiondata( "string", "Expiration", "%d-%b-%y")
+
+  # Merge in current prices, and closeout prices
+  last.price <- mapply( process.closeout, pos$Closeout, pos$Type, pos$Strike, option.prices  )
+    
+  option.prices.df <- data.frame( ID = names(option.prices), LastPrice = last.price)
+  pos <- merge(pos, option.prices.df, by = "ID")
+  
+  # Generate discount factors
+  df.curve <- bootstrap.df.curve()
+  pos$DiscountFactor <- discount.factor( df.curve, pos$Expiration )
+  
+  # Calculate implied volatilities
+  ivol <- mapply( implied.volatility, pos$LastPrice, pos$Type, pos$Strike, pos$Expiration, spot.price, pos$DiscountFactor, pricing.date  )
+  pos$Volatility <- ivol
+
+  # Recover prices
+  pos$LastPriceCalc <- mapply( BSPrice, pos$Type, pos$Strike, pos$Expiration, spot.price, pos$Volatility, pos$DiscountFactor, pricing.date )
+  
+  pos.display <- pos
+  # Volatility in percent, rounded to decimals
+  pos.display$Volatility <- round(pos.display$Volatility*1000)/10
+  # Last price calc rounded to 1/10 pennies
+  pos.display$LastPriceCalc <- round(pos.display$LastPriceCalc*1000)/1000
+  pos.display$DiscountFactor <- NULL
+  kable( pos.display )
+
+  
+  pos$NPV <- pos$LastPrice * lot.size * pos$Quantity
+  pos$LTD.PNL <- pos$NPV - pos$CostBasis * lot.size * pos$Quantity
+
+```
+
+
+## Risk Sensivities
+
+Portfolio risk sensitivities
+
+
+```{r greeks calc, echo=FALSE}
+  # Calculate per-unit greeks
+  pos.open <- filter( pos, Closeout == 0)
+
+  greeks.mapply <- mapply( BSGreeks, pos.open$Type, pos.open$Strike, pos.open$Expiration, spot.price, pos.open$Volatility, pos.open$DiscountFactor, pricing.date )
+  greeks <- data.frame( ID = pos.open$ID )
+  greeks <- cbind( greeks, df.convert( t(greeks.mapply)))
+  
+```
+
+
+```{r risk measure calc, echo=FALSE}
+  # Generate sensitivity risk reports for the portfolio
+  risk.measure.spec <- data.frame(
+    name = c( "delta", "delta 1%", "dv100", "vega 1%", "daily carry" ),
+    greek = c( "delta", "delta", "rho", "vega", "tau" ),
+    delta = c( 0.01, spot.price/100, 0.01, 0.01, 1/365 ),
+    stringsAsFactors = FALSE
+  )
+  risk.report.df <- risk.report( pos.open, greeks, risk.measure.spec )
+  totals <- apply( subset( risk.report.df, select=-ID ), MARGIN=2, sum)
+
+  kable( totals, digits=2)
+```
+
+<p><p>
+Risk sensitivities by position
+
+```{r risk measures breakout, echo=FALSE}
+  kable( risk.report.df, digits=2 )
+```
+  
+## P&L Projection 
+
+Profit and loss projection for various future dates and underlying spot price scenarios.
+
+```{r pnl projection, echo=FALSE}  
+  # Generate a pnl projection matrix
+  spots <- spot.price * c( 0.5, 0.75, 0.9, 0.95, 1, 1.05, 1.1, 1.25 )
+  spots <- spot.price * c( 0.5, 0.75, 0.9, 0.95, 1, 1.05, 1.1, 1.25 )
+  spots <- sort( c( spots, 10, 12.5 ) )
+
+  dates <- c( pricing.date + c(0,7), pricing.date %m+% months(c(1,3,6,12, 18), FALSE))
+  pnl.report.df <- pnl.report( pos, spots, dates, df.curve )
+  
+  pnl.summary <- pnl.report.df %>% 
+    group_by( spot, pricing.date ) %>%
+    summarize( PNL=sum(PNL), LTD.PNL =sum(LTD.PNL), NPV=sum(NPV))
+  
+  kable( dcast( pnl.summary, pricing.date ~ spot, value.var="LTD.PNL"), digits=0, caption="Overall PNL" )
+  kable( dcast( pnl.summary, pricing.date ~ spot, value.var="PNL"), digits=0, caption="PNL from present" )
+  kable( dcast( pnl.summary, pricing.date ~ spot, value.var="NPV"), digits=0, caption="NPV" )
+```
+
+In graphical format
+
+```{r pnl graph, echo=FALSE, fig.height=4, fig.width=6}
+
+  scale.pref <- scale_y_continuous( labels = comma ) 
+  
+  ggplot( pnl.summary ) +geom_line( aes(x=pricing.date, y=PNL, color=as.character( spot ))) + scale.pref + scale_color_discrete( name = "spot") + labs(x="date", y="PNL")+ggtitle("PNL from present")
+  ggplot( pnl.summary )  +geom_line( aes(x=spot, y=PNL, color=as.character(pricing.date)))+ scale.pref+ scale_color_discrete( name = "date")+ labs(x="spot", y="PNL")+ggtitle("PNL from present")
+
+  ggplot( pnl.summary ) +geom_line( aes(x=pricing.date, y=LTD.PNL, color=as.character( spot )))+ scale.pref+ scale_color_discrete( name = "spot")+labs(x="date", y="PNL")+ ggtitle("Overall PNL")
+  ggplot( pnl.summary )  +geom_line( aes(x=spot, y=LTD.PNL, color=as.character(pricing.date)))+ scale.pref+ scale_color_discrete( name = "date" )+labs(x="spot", y="PNL")+ ggtitle("Overall PNL")
+```
+
+## Option Greeks
+
+Black-Scholes greeks for each position.
+
+```{r greeks print, echo=FALSE}
+  kable( greeks, digits=3)
+```
+
+## Interest Rates
+
+Current interest rates, bootstrapped from ICE Libor and ICE Swaps.
+
+```{r interest rates, echo=FALSE}
+  # Generate an interst rate curve
+  dates.plot = c( pricing.date+1,pricing.date %m+% months(1:15))
+  df.plot = discount.factor( df.curve, dates.plot )
+  rates.plot = -log( df.plot )/calc.term(dates.plot,pricing.date)*100
+  qplot( dates.plot, rates.plot, geom="line", xlab="date", ylab="interest rate (%)")
+```
+
+
+
